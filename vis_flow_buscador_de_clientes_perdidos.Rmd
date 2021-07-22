@@ -1,0 +1,152 @@
+---
+title: "Buscador de clientes perdidos para su recuperación"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    source_code: embed
+    social: [  "menu" ]
+author: "Gustavo Dejean"
+date: "19/7/2021"
+---
+
+```{r setup_2, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+rm(list = ls())
+gc()
+```
+
+```{r , include=FALSE}
+
+library(ggplot2)
+library(plotly)
+library(flexdashboard)
+library(htmlwidgets)
+
+library(tidyverse)
+library(lubridate)
+library(sqldf)
+library(splitstackshape)
+library(crosstalk) # exportar un DF al HTML 
+library(DT)
+library(data.table) 
+library(formattable)
+library(readr)
+
+# lectura
+
+train <- read_csv("datos/train.csv", locale = locale(grouping_mark = ""))
+
+train$customer_id  <- as.factor(train$customer_id)
+train$account_id   <- as.factor(train$account_id)
+train$device_type  <- as.factor(train$device_type)
+train$asset_id     <- as.factor(train$asset_id)
+train$resume       <- as.factor(train$resume)
+train$tunein       <- substr(train$tunein,1,10)
+train$ultima_fecha <- as.Date(as.character(train$tunein), format = "%Y-%m-%d")
+
+train <- select(train, -c('tuneout','tunein'))
+train <- sqldf("select customer_id
+                       , count(account_id)           as cant_cuentas
+                       , count(distinct device_type) as cant_canales
+                       , count(asset_id)             as cant_videos
+                       , max(ultima_fecha)           as ultima_fecha
+                from train
+                group by 1 ")
+
+train_sub <-subset(train, train$ultima_fecha < "2021-02-01")
+
+# Wrap data frame in SharedData
+train_vis     <- SharedData$new(train_sub)
+```
+
+
+```{r , filters 1, 2, 3}
+
+f1 <- list(
+  family = "Arial, sans-serif",
+  size = 18,
+  color = "lightgrey"
+)
+f2 <- list(
+  family = "Old Standard TT, serif",
+  size = 14,
+  color = "black"
+)
+cant_canales <- list(
+                title = "cantidad de canales usados",
+                titlefont = f1,
+                showticklabels = TRUE,
+                tickangle = 0,
+                tickfont = f2,
+                exponentformat = "E"
+                )
+cant_clientes <- list(
+                 title = "cantidad de clientes",
+                 titlefont = f1,
+                 showticklabels = TRUE,
+                 tickangle = 0,
+                 tickfont = f2,
+                 exponentformat = "E"
+                 )
+f_ultima     <- list(
+                title = "fecha de la última visualización",
+                titlefont = f1,
+                showticklabels = TRUE,
+                tickangle = 0,
+                tickfont = f2,
+                exponentformat = "E"
+                )
+
+bscols(widths = c(5,NA,NA),
+  list(
+         filter_slider(id         = "ultima_fecha"
+                      ,label      = "última_fecha"
+                      ,sharedData =  train_vis
+                      , ~ultima_fecha
+                      , width = NULL) 
+),
+
+
+plot_ly(train_vis , x = ~cant_canales) %>% add_histogram(xbins= 1) %>% layout(xaxis = cant_canales, yaxis = cant_clientes),
+ 
+plot_ly(train_vis , x = ~ultima_fecha) %>% add_histogram(xbins= 1) %>% layout(xaxis = f_ultima    , yaxis = cant_clientes) 
+ 
+)
+``` 
+
+
+```{r table_2, echo = FALSE}
+datatable(train_vis, extensions= c('Buttons', "Scroller")
+                     , filter = "top"
+                     , style  = "bootstrap" 
+                     , class  = "display nowrap compact", rownames = FALSE
+                    # , class = "display nowrap compact"    # "display nowrap compact"
+                    , width = "100%"
+                    , options=list(
+                          dom = 'Blfrtip'
+                        , buttons = c('copy', 'csv', 'excel', 'pdf', 'print') 
+                        , lengthMenu = list(c( 10, 25, 50, -1 ), c(10, 25, 50, "todo"))
+                        , deferRender = TRUE
+                        , scrollY     = 300
+                        , scrollX     = 300
+                        , scroller    = FALSE
+                        , list(pageLength = 5, autoWidth = TRUE))
+                        , caption = htmltools::tags$caption(
+                            style = 'caption-side:top ; text-align: left ;',
+                            'Tabla 1: ', htmltools::em('clientes cuyo último acceso esta dentro del rango del filtro "última fecha" ')))
+
+```
+
+## 
+### cantidad de clientes totales
+```{r}
+valueBox(formattable::comma(nrow(distinct(train, customer_id)),  big.mark = ".", digits = 0), icon ='comment', color = 'success')
+```
+
+### cantidad de perfiles totales
+```{r}
+valueBox(formattable::comma(sum(train$cant_cuentas),  big.mark = ".", digits = 0), icon ='fa-eye', color = 'warning')
+```
+
+
+

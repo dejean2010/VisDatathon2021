@@ -1,0 +1,30 @@
+---
+title: "visualizador de Flow"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    source_code: embed
+    social: [  "menu" ]
+author: "Gustavo Dejean"
+date: "20/7/2021"
+---
+
+```{r bibliotecas}
+library(flexdashboard)
+```
+
+# buscador de pérdida de clientes
+```{r child = 'vis_flow_buscador_de_clientes_perdidos.Rmd'}
+
+```
+# buscador de videos
+```{r child = 'vis_flow_buscador_de_videos_v2.Rmd'}
+
+```
+
+
+
+
+
+
+

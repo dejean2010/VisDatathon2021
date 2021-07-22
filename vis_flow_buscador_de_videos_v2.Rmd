@@ -1,0 +1,160 @@
+---
+title: "Buscador de videos de la plataforma Flow"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    source_code: embed
+    social: [  "menu" ]
+author: "Gustavo Dejean"
+date: "19/7/2021"
+---
+
+```{r setup_1, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+rm(list = ls())
+
+#https://github.com/Datathon2021/data-viz
+
+```
+
+
+```{r bibliotecas_1, include=FALSE}
+
+library(ggplot2)
+library(plotly)
+library(flexdashboard)
+library(htmlwidgets)
+library(tm) # nube de palabras
+library(wordcloud)
+library(tidyverse)
+library(lubridate)
+library(sqldf)
+library(splitstackshape)
+library(crosstalk)  # exportar un DF al HTML 
+library(DT)
+library(data.table) 
+library(readr)
+```
+
+```{r leer metadata, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+metadata <- read_delim("datos/metadata.csv", 
+                       ";", escape_double = FALSE, locale = locale(grouping_mark = ""), 
+                       trim_ws = TRUE)
+
+## leer paises
+
+library(rjson)
+library(jsonlite)
+paises<-jsonlite::stream_in(file("datos/iso_3166_1.json"))
+
+
+library(tidyr)
+paises <- gather(paises, id_pais, pais,1:ncol(paises))
+
+## hacemos la junta con paises
+
+datos <- sqldf("select m.*, p.pais
+               from metadata m , paises p
+               where m.country_of_origin = p.id_pais")
+datos$pais <- as.factor(datos$pais)
+rm(paises)
+
+datos$asset_id             <- as.factor(datos$asset_id)
+datos$content_id           <- as.factor(datos$content_id)
+datos$title                <- as.factor(datos$title)
+datos$country_of_origin    <- as.factor(datos$country_of_origin)
+datos$cast_first_name      <- as.factor(datos$cast_first_name)
+datos$show_type            <- as.factor(datos$show_type)
+datos$released_year        <- as.factor(datos$released_year)
+datos$category             <- as.factor(datos$category)
+datos$credits_first_name   <- as.factor(datos$credits_first_name)
+datos$audience             <- as.factor(datos$audience)
+datos$made_for_tv          <- as.factor(datos$made_for_tv)
+datos$close_caption        <- as.factor(datos$close_caption)
+datos$sex_rating           <- as.factor(datos$sex_rating)
+datos$violence_rating      <- as.factor(datos$violence_rating)
+datos$language_rating      <- as.factor(datos$language_rating)
+datos$dialog_rating        <- as.factor(datos$dialog_rating)
+datos$fv_rating            <- as.factor(datos$fv_rating)
+datos$pay_per_view         <- as.factor(datos$pay_per_view)
+datos$pack_premium_1       <- as.factor(datos$pack_premium_1)
+datos$pack_premium_2       <- as.factor(datos$pack_premium_2)
+
+datos <- select(datos, -c('create_date', "modify_date", "start_vod_date"))
+
+# Wrap data frame in SharedData
+datos_vis     <- SharedData$new(datos)
+
+```
+
+
+```{r , filters 1, 2, 3, 4, 5}
+
+hoy <- today()
+bscols(widths = c(4,NA,NA),
+  list(
+filter_checkbox(id          = "end_vod_date" 
+                ,label      = "disponible en la plataforma No/Sí"
+                ,sharedData = datos_vis 
+                ,group      = ~ifelse(end_vod_date  >= hoy   , "Sí", "No")
+                ,inline     = TRUE),
+
+filter_checkbox(id          = "show_type" 
+                ,label      = "filtrar por tipo"
+                ,sharedData = datos_vis 
+                ,group      = ~show_type
+                ,inline     = TRUE),
+
+filter_select("category", "filtrar por categoría"
+              , sharedData = datos_vis
+              , group      = ~category
+              , multiple   = TRUE),
+
+
+filter_select(  id         = "pais" 
+              , label      = "filtrar por país"
+              , sharedData = datos_vis 
+              , group      = ~pais
+              , multiple   = TRUE),
+
+filter_select(  id         = "released_year"
+              , label      = "año"
+              , sharedData = datos_vis
+              , group      = ~released_year
+              , multiple   = TRUE)
+),
+
+plot_ly(datos_vis , x = ~show_type) %>% add_histogram(xbins= 8)
+
+)
+``` 
+
+
+```{r table_1, echo = FALSE}
+datatable(datos_vis, extensions= c('Buttons', "Scroller")
+                     , filter = "top"
+                     , style = "bootstrap" 
+                     , class="display nowrap compact", rownames = FALSE
+                    # , class = "display nowrap compact"    # "display nowrap compact"
+                    , width = "100%"
+                    , options=list(
+                          dom = 'Blfrtip'
+                        , buttons = c('copy', 'csv', 'excel', 'pdf', 'print') 
+                        , lengthMenu = list(c( 10, 25, 50, -1 ), c(10, 25, 50, "todo"))
+                        , deferRender = TRUE
+                        , scrollY     = 300
+                        , scrollX     = 300
+                        , scroller    = FALSE
+                        , list(pageLength = 5, autoWidth = TRUE))
+                        , caption = htmltools::tags$caption(
+                                     style = 'caption-side:top ; text-align: left ;',
+                                     'Tabla 1: ', htmltools::em('tabla de contenidos aplicada a los filtros'))) 
+  
+```
+## 
+### cantidad de videos totales
+```{r}
+valueBox(formattable::comma(nrow(distinct(datos, asset_id)),  big.mark = ".", digits = 0), icon ='fa-eye', color = 'success')
+```
+
